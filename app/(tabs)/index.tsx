@@ -1,11 +1,14 @@
 import { AIRecommendations } from "@/components/ai/AIRecommendations";
+import { ChatModal } from "@/components/chat/ChatModal";
+import { FloatingChatButton } from "@/components/chat/FloatingChatButton";
 import { ProductCard } from "@/components/products/ProductCard";
 import { SearchBar } from "@/components/products/SearchBar";
 import { useCart } from "@/contexts/CartContext";
+import { useChat } from "@/hooks/use-chat";
 import { useProducts } from "@/hooks/use-products";
 import { Product } from "@/types";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,10 +22,28 @@ import {
 
 export default function ProductListScreen() {
   const router = useRouter();
-  const { products, loading, error, loadMore, refresh, search, searchQuery } =
-    useProducts();
+  const {
+    products,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    refresh,
+    search,
+    aiSearch,
+    searchQuery,
+  } = useProducts();
   const { addToCart, items } = useCart();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [chatModalVisible, setChatModalVisible] = React.useState(false);
+
+  // Chat hook
+  const {
+    messages,
+    loading: chatLoading,
+    sendMessage,
+    clearChat,
+  } = useChat(products);
 
   const handleProductPress = (product: Product) => {
     router.push(`/product/${product.id}`);
@@ -48,12 +69,24 @@ export default function ProductListScreen() {
   );
 
   const renderFooter = () => {
-    if (!loading) return null;
-    return (
-      <View style={styles.footer}>
-        <ActivityIndicator size="small" color="#007AFF" />
-      </View>
+    console.log(
+      `renderFooter - loading: ${loading}, hasMore: ${hasMore}, searchQuery: "${searchQuery}"`
     );
+
+    // Don't show footer when searching
+    if (searchQuery) return null;
+
+    // Show loading indicator when loading more products
+    if (loading) {
+      return (
+        <View style={styles.footer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading more products...</Text>
+        </View>
+      );
+    }
+
+    return null;
   };
 
   const renderEmpty = () => {
@@ -91,7 +124,7 @@ export default function ProductListScreen() {
     );
   };
 
-  const renderHeader = () => {
+  const renderHeader = useMemo(() => {
     if (searchQuery || products.length === 0) return null;
 
     return (
@@ -102,11 +135,35 @@ export default function ProductListScreen() {
         onAddToCart={handleAddToCart}
       />
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, products.length, searchQuery]); // Only re-render when counts change
+
+  const handleLoadMore = () => {
+    console.log(`handleLoadMore called - searchQuery: "${searchQuery}"`);
+    if (!searchQuery) {
+      loadMore();
+    }
+  };
+
+  const handleClearChat = () => {
+    Alert.alert("Clear Chat", "Are you sure you want to clear all messages?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: clearChat,
+      },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <SearchBar value={searchQuery} onChangeText={search} />
+      <SearchBar
+        value={searchQuery}
+        onChangeText={search}
+        onAISearch={aiSearch}
+        aiSearchLoading={loading && searchQuery.length > 0}
+      />
 
       <FlatList
         data={products}
@@ -116,13 +173,29 @@ export default function ProductListScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
-        onEndReached={loadMore}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
+      />
+
+      {/* Floating Chat Button */}
+      <FloatingChatButton
+        onPress={() => setChatModalVisible(true)}
+        unreadCount={0}
+      />
+
+      {/* Chat Modal */}
+      <ChatModal
+        visible={chatModalVisible}
+        onClose={() => setChatModalVisible(false)}
+        messages={messages}
+        loading={chatLoading}
+        onSendMessage={sendMessage}
+        onClear={handleClearChat}
       />
     </SafeAreaView>
   );

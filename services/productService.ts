@@ -103,4 +103,25 @@ export const productService = {
         product.category.toLowerCase().includes(lowerQuery)
     );
   },
+
+  // Fetch ALL products (for comprehensive search)
+  async getAllProducts(): Promise<Product[]> {
+    const cacheKey = "all_products";
+    const cached = getCachedData(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      // FakeStore API has ~20 products total
+      const response = await axios.get(`${BASE_URL}/products`);
+      const data = response.data;
+      setCachedData(cacheKey, data);
+      return data;
+    } catch (error) {
+      console.error("Error fetching all products:", error);
+      throw error;
+    }
+  },
 };

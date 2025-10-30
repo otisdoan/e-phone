@@ -1,5 +1,5 @@
 import { Product } from "@/types";
-import React, { useEffect, useState } from "react";
+import React, { memo, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -20,7 +20,7 @@ interface AIRecommendationsProps {
   onAddToCart: (product: Product) => void;
 }
 
-export const AIRecommendations = ({
+const AIRecommendationsComponent = ({
   cartItems,
   allProducts,
   onProductPress,
@@ -28,13 +28,26 @@ export const AIRecommendations = ({
 }: AIRecommendationsProps) => {
   const [recommendations, setRecommendations] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lastCartLength, setLastCartLength] = useState(0);
 
   useEffect(() => {
-    loadRecommendations();
+    // Only load if cart actually changed (not on mount or scroll)
+    if (cartItems.length !== lastCartLength) {
+      setLastCartLength(cartItems.length);
+      loadRecommendations();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartItems.length]);
 
   const loadRecommendations = async () => {
+    // Don't reload if already loading or if we have results for this cart size
+    if (
+      loading ||
+      (recommendations.length > 0 && cartItems.length === lastCartLength)
+    ) {
+      return;
+    }
+
     setLoading(true);
     try {
       const recs = await geminiService.getProductRecommendations(
@@ -191,3 +204,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
+
+// Memoize component to prevent re-renders on scroll
+export const AIRecommendations = memo(
+  AIRecommendationsComponent,
+  (prevProps, nextProps) => {
+    // Only re-render if cart items or products actually changed
+    return (
+      prevProps.cartItems.length === nextProps.cartItems.length &&
+      prevProps.allProducts.length === nextProps.allProducts.length
+    );
+  }
+);

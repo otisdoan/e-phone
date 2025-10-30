@@ -1,12 +1,15 @@
 import { AIRecommendations } from "@/components/ai/AIRecommendations";
 import { CartItem } from "@/components/cart/CartItem";
 import { PriceSummary } from "@/components/cart/PriceSummary";
+import { ChatModal } from "@/components/chat/ChatModal";
+import { FloatingChatButton } from "@/components/chat/FloatingChatButton";
 import { useCart } from "@/contexts/CartContext";
+import { useChat } from "@/hooks/use-chat";
 import { useProducts } from "@/hooks/use-products";
 import { CartItem as CartItemType, Product } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Alert,
   FlatList,
@@ -29,6 +32,15 @@ export default function CartScreen() {
     addToCart,
   } = useCart();
   const { products } = useProducts();
+  const [chatModalVisible, setChatModalVisible] = React.useState(false);
+
+  // Chat hook
+  const {
+    messages,
+    loading: chatLoading,
+    sendMessage,
+    clearChat: clearChatHistory,
+  } = useChat(products);
 
   const handleCheckout = () => {
     Alert.alert(
@@ -44,6 +56,17 @@ export default function CartScreen() {
     Alert.alert("Clear Cart", "Are you sure you want to remove all items?", [
       { text: "Cancel", style: "cancel" },
       { text: "Clear", style: "destructive", onPress: clearCart },
+    ]);
+  };
+
+  const handleClearChatHistory = () => {
+    Alert.alert("Clear Chat", "Are you sure you want to clear all messages?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: clearChatHistory,
+      },
     ]);
   };
 
@@ -83,8 +106,11 @@ export default function CartScreen() {
 
   const renderFooter = () => {
     if (items.length === 0) return null;
+    return footerContent;
+  };
 
-    return (
+  const footerContent = useMemo(
+    () => (
       <View style={styles.footer}>
         <AIRecommendations
           cartItems={items}
@@ -114,8 +140,9 @@ export default function CartScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-    );
-  };
+    ),
+    [items.length, products.length, totalItems, totalPrice]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -127,6 +154,22 @@ export default function CartScreen() {
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
+      />
+
+      {/* Floating Chat Button */}
+      <FloatingChatButton
+        onPress={() => setChatModalVisible(true)}
+        unreadCount={0}
+      />
+
+      {/* Chat Modal */}
+      <ChatModal
+        visible={chatModalVisible}
+        onClose={() => setChatModalVisible(false)}
+        messages={messages}
+        loading={chatLoading}
+        onSendMessage={sendMessage}
+        onClear={handleClearChatHistory}
       />
     </SafeAreaView>
   );

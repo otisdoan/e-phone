@@ -3,11 +3,18 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Gemini AI Configuration - API v1 (2025)
 // ✅ Verified working models: gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash
-const GEMINI_API_KEY = "AIzaSyCdwUHiSekrQde3pAuv2Ch_PO_xDlo3ZSc";
+const GEMINI_API_KEY = "AIzaSyDseopreaLRyzwG0XYBf3Edf8-tVRtrqwo";
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Sử dụng model mới nhất (June 2025)
 const MODEL_NAME = "gemini-2.5-flash";
+
+// Cache for AI recommendations (reduce API calls)
+const recommendationCache = new Map<
+  string,
+  { data: Product[]; timestamp: number }
+>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export const geminiService = {
   /**
@@ -22,6 +29,21 @@ export const geminiService = {
       if (cartItems.length === 0 || allProducts.length === 0) {
         return allProducts.slice(0, 3);
       }
+
+      // Create cache key based on cart items
+      const cacheKey = cartItems
+        .map((item) => item.id)
+        .sort()
+        .join(",");
+
+      // Check cache first
+      const cached = recommendationCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        console.log("Using cached AI recommendations");
+        return cached.data;
+      }
+
+      console.log("Fetching new AI recommendations...");
 
       // Use Gemini AI for intelligent recommendations
       const model = genAI.getGenerativeModel({ model: MODEL_NAME });
@@ -81,7 +103,13 @@ No explanations, just the array.`;
 
       // Ensure we have 3 recommendations
       if (recommendations.length >= 3) {
-        return recommendations.slice(0, 3);
+        const finalRecs = recommendations.slice(0, 3);
+        // Cache the results
+        recommendationCache.set(cacheKey, {
+          data: finalRecs,
+          timestamp: Date.now(),
+        });
+        return finalRecs;
       }
 
       // If AI didn't return enough, add popular products
@@ -90,7 +118,15 @@ No explanations, just the array.`;
         .filter((p) => !cartItems.find((item) => item.id === p.id))
         .slice(0, 3 - recommendations.length);
 
-      return [...recommendations, ...additional].slice(0, 3);
+      const finalRecs = [...recommendations, ...additional].slice(0, 3);
+
+      // Cache the results
+      recommendationCache.set(cacheKey, {
+        data: finalRecs,
+        timestamp: Date.now(),
+      });
+
+      return finalRecs;
     } catch (error) {
       console.error("AI Recommendation error:", error);
       // Fallback to category-based recommendations
